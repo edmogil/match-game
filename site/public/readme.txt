@@ -191,6 +191,15 @@ In config.js (public, safe to expose):
 
 9. UPDATING THE GAME
 --------------------
+  Automatic (current way): the code lives in GitHub (private repo
+  edmogil/match-game). Cloudflare watches the "main" branch. Every change
+  pushed to it rebuilds and deploys the website by itself (root directory:
+  "site", deploy command: npx wrangler deploy). Check the version label at the
+  bottom of the game to confirm which version is live.
+  The matcher worker is NOT auto-deployed yet. It is still pasted in by hand
+  (see "Matcher" below).
+
+  Manual way (backup):
   Website:  Cloudflare dashboard -> your site project -> upload the new zip
             of index.html, app.js, config.js (and readme.txt).
   Matcher:  Cloudflare dashboard -> Workers -> matchgame-matcher -> Edit code
