@@ -58,13 +58,20 @@ Ending
 Press "Manual Mode" on the start screen instead of "Create a room".
 The app does NOT match words. Players keep score themselves.
 
-  1. Each player types 3 words and presses the lock-in button. After that the
-     words cannot be changed.
+  1. The host presses "Start round". Everyone gets 90 seconds (a countdown
+     shows at the top) to type 3 words. A player can press Lock in early.
+     When the time runs out, whatever is typed is locked in automatically.
+     After locking, words cannot be changed.
   2. Players only ever see their OWN words. Other players' cards show only
      the name, a lock icon and the round total.
-  3. When everyone has locked in, read your words aloud one at a time. Each
-     player then types, next to each of their own words, the match count
+  3. The match-count boxes stay switched off until EVERYONE is locked in.
+     Then a green message appears on every phone ("Everyone is locked in!")
+     and the phones buzz. Only then do players read their words aloud, one
+     at a time, and type how many matched next to each of their words
      (type 1 for a word nobody matched, 2 if one other person matched, etc.).
+     The host can press "Finish round now" to end the timer early.
+     If a phone is asleep when time is up, the host's phone locks that
+     player in 3 seconds later so the round never gets stuck.
   4. The round total is the sum of the three numbers.
   5. The numbered tabs at the top let anyone go back to any round. Match counts
      can still be changed there (words cannot).

@@ -14,8 +14,8 @@ const T = {
     scanJoin: "Scan to join or enter the code",
     endRound: "Finish round now", byWord: "Matches by word", endGame: "End game & announce winner", endConfirm: "End the game now and announce the winner?",
     rounds: "Number of rounds", winnersAre: "Winners:", tie: "It's a tie!",
-    manual: "Manual Mode", manualBadge: "Manual scoring", manualHint: "Type your 3 words and lock in (words can't be changed after that). When everyone has locked in, read your words out loud one at a time, then type how many matched next to each word.",
-    matchCount: "Matches", typing: "Waiting for words...", unlock: "Edit my words", lockedIn: "Locked in:", finishGame: "Finish game & show final scores",
+    manual: "Manual Mode", manualBadge: "Manual scoring", manualHint: "The host starts the round and you have 90 seconds to type 3 words. Words lock automatically when time runs out, and can't be changed after that. When everyone is locked in, the app tells you. Then read your words out loud one at a time and type how many matched next to each word.",
+    matchCount: "Matches", startRound: "Start round", notStarted: "Waiting for the round to start...", waitHostStart: "Waiting for the host to start the round...", hostStartHint: "Press Start when everyone is ready. Everyone gets 90 seconds to type.", allLocked: "Everyone is locked in! Now read your words out loud, one at a time, then type your match counts.", typing: "Waiting for words...", unlock: "Edit my words", lockedIn: "Locked in:", finishGame: "Finish game & show final scores",
     roundTotal: "Round total", total: "Total", word: "Word", addRound: "+ Add a round", reopen: "Back to scoring", sheet: "Score sheet", player: "Player",
     hostEdits: "", lockedPrivate: "Locked in. Words stay private until read aloud.", onlyOwn: "You only see your own words. After you lock in, you can only change your match counts.", manualWord: "Word",
   },
@@ -33,8 +33,8 @@ const T = {
     scanJoin: "Отсканируй QR или введи код",
     endRound: "Закончить раунд сейчас", byWord: "Совпадения по словам", endGame: "Закончить игру и объявить победителя", endConfirm: "Закончить игру сейчас и объявить победителя?",
     rounds: "Количество раундов", winnersAre: "Победители:", tie: "Ничья!",
-    manual: "Ручной режим", manualBadge: "Ручной подсчёт", manualHint: "Напиши 3 слова и нажми «Готово» (после этого слова менять нельзя). Когда все готовы, читайте слова вслух по очереди и вводите рядом с каждым словом число совпадений.",
-    matchCount: "Совпадений", typing: "Ждём слова...", unlock: "Изменить мои слова", lockedIn: "Готовы:", finishGame: "Закончить игру и показать итоги",
+    manual: "Ручной режим", manualBadge: "Ручной подсчёт", manualHint: "Хозяин начинает раунд, у тебя 90 секунд на 3 слова. Когда время выйдет, слова блокируются сами, и менять их нельзя. Когда все готовы, приложение сообщит. Тогда читайте слова вслух по очереди и вводите рядом с каждым словом число совпадений.",
+    matchCount: "Совпадений", startRound: "Начать раунд", notStarted: "Ждём начала раунда...", waitHostStart: "Ждём, пока хозяин начнёт раунд...", hostStartHint: "Нажми «Начать», когда все готовы. У всех 90 секунд на ввод.", allLocked: "Все готовы! Читайте свои слова вслух по очереди, затем вводите числа совпадений.", typing: "Ждём слова...", unlock: "Изменить мои слова", lockedIn: "Готовы:", finishGame: "Закончить игру и показать итоги",
     roundTotal: "Итог раунда", total: "Всего", word: "Слово", addRound: "+ Добавить раунд", reopen: "Назад к подсчёту", sheet: "Таблица счёта", player: "Игрок",
     hostEdits: "", lockedPrivate: "Готово. Слова скрыты, пока их не прочитают вслух.", onlyOwn: "Ты видишь только свои слова. После «Готово» можно менять только числа совпадений.", manualWord: "Слово",
   },
@@ -352,10 +352,30 @@ function setNum(pid, rd, i, v) {
   editRound(pid, rd, (c) => { c.n[i] = n; });
   saveManual(pid); refreshTotals(pid, rd);
 }
-function lockWords(rd, lock) {
+// shared round timer: the host starts it, the end time is stored in the room (results.t[round])
+const mTimers = () => (state.room && state.room.results && state.room.results.t) || {};
+const mEnds = (rd) => (mTimers()[String(rd)] ? new Date(mTimers()[String(rd)]).getTime() : null);
+const mStarted = (rd) => mEnds(rd) !== null;
+const mLeft = (rd) => (mStarted(rd) ? Math.max(0, Math.ceil((mEnds(rd) - Date.now()) / 1000)) : 0);
+const allLocked = (rd) => state.players.length > 0 && state.players.every((p) => mr(p, rd).l);
+async function setMTimer(rd, iso) {
+  const results = { ...(state.room.results || {}), t: { ...mTimers(), [String(rd)]: iso } };
+  state.room.results = results; render(true);
+  await sb.from("rooms").update({ results }).eq("id", state.room.id);
+}
+async function startManualRound(rd) {
+  if (!isHost() || mStarted(rd)) return;
+  await setMTimer(rd, new Date(Date.now() + CONFIG.ROUND_SECONDS * 1000).toISOString());
+}
+async function endManualRoundNow(rd) {
+  if (!isHost() || !mStarted(rd) || allLocked(rd)) return;
+  await setMTimer(rd, new Date().toISOString());
+}
+function lockWords(rd, lock, auto) {
   const me = state.players.find((x) => x.id === state.pid); if (!me || !lock || mr(me, rd).l) return;
-  if (lock && mr(me, rd).w.some((w) => !w.trim())) { const e = document.getElementById("lockerr"); if (e) e.textContent = t("need3"); return; }
-  editRound(state.pid, rd, (c) => { c.l = lock ? 1 : 0; c.w = c.w.map((w) => w.trim()); });
+  if (!mStarted(rd)) return;
+  if (!auto && mr(me, rd).w.some((w) => !w.trim())) { const e = document.getElementById("lockerr"); if (e) e.textContent = t("need3"); return; }
+  editRound(state.pid, rd, (c) => { c.l = 1; c.w = c.w.map((w) => w.trim()); });
   saveManual(state.pid, true); render(true);
 }
 function showRound(n) { state.manualRound = n; render(true); }
@@ -381,6 +401,8 @@ function manualView() {
   const r = state.room, n = r.total_rounds;
   const cur = Math.min(Math.max(state.manualRound || 1, 1), n);
   state.manualRound = cur;
+  const started = mStarted(cur), left = mLeft(cur), locked = allLocked(cur);
+  const live = started && left > 0 && !locked; // words can be typed right now
   const tabs = `<div class="rtabs">${Array.from({ length: n }, (_, i) => `<button class="${i + 1 === cur ? "on" : ""}" onclick="showRound(${i + 1})">${i + 1}</button>`).join("")}</div>`;
   const ordered = [...state.players].sort((a, b) => (a.id === state.pid ? -1 : b.id === state.pid ? 1 : 0));
   const lockedCount = state.players.filter((p) => mr(p, cur).l).length;
@@ -390,15 +412,22 @@ function manualView() {
     let rows;
     if (mine) {
       rows = [0, 1, 2].map((i) => `<div class="mrow">
-        <input class="mw" ${mine && !m.l ? "" : "readonly"} maxlength="40" placeholder="${t("wordPh")} ${i + 1}" autocomplete="off" autocapitalize="off" value="${esc(m.w[i])}" ${mine ? `oninput="setWord('${esc(p.id)}',${cur},${i},this.value)"` : ""}>
-        <input class="mn" type="number" inputmode="numeric" min="0" max="99" placeholder="0" ${ed && m.l ? "" : "disabled"} value="${m.n[i] || ""}" oninput="setNum('${esc(p.id)}',${cur},${i},this.value)" aria-label="${t("matchCount")}">
+        <input class="mw" ${live && !m.l ? "" : "readonly"} maxlength="40" placeholder="${t("wordPh")} ${i + 1}" autocomplete="off" autocapitalize="off" value="${esc(m.w[i])}" oninput="setWord('${esc(p.id)}',${cur},${i},this.value)">
+        <input class="mn" type="number" inputmode="numeric" min="0" max="99" placeholder="0" ${ed && locked && m.w[i] ? "" : "disabled"} value="${m.n[i] || ""}" oninput="setNum('${esc(p.id)}',${cur},${i},this.value)" aria-label="${t("matchCount")}">
       </div>`).join("");
-    } else rows = `<p class="sub center">${m.l ? t("lockedPrivate") : t("typing")}</p>`;
-    const act = mine ? (m.l ? "" : `<div class="err" id="lockerr"></div><button onclick="lockWords(${cur},true)">${t("submit")}</button>`) : "";
+    } else rows = `<p class="sub center">${m.l ? t("lockedPrivate") : started ? t("typing") : t("notStarted")}</p>`;
+    const act = mine && !m.l ? `<div class="err" id="lockerr"></div><button ${live ? "" : "disabled"} onclick="lockWords(${cur},true)">${t("submit")}</button>` : "";
     return `<div class="card">${head}${rows}${act}</div>`;
   }).join("");
-  return `<p class="sub center"><span class="badge">${t("manualBadge")}</span></p>
-  <p class="sub center">${t("round")} ${cur} ${t("of")} ${n} · ${t("lockedIn")} ${lockedCount}/${state.players.length}</p>${tabs}
+  const banner = locked && started ? `<div class="alllocked">✅ ${t("allLocked")}</div>`
+    : started ? `<p class="sub center">${t("waitOthers")}: ${lockedCount}/${state.players.length}</p>`
+    : `<p class="sub center">${isHost() ? t("hostStartHint") : t("waitHostStart")}</p>`;
+  const hostBtn = isHost() && !started ? `<button class="alt" onclick="startManualRound(${cur})">▶ ${t("startRound")} ${cur} (${CONFIG.ROUND_SECONDS}s)</button>`
+    : isHost() && started && !locked ? `<button class="alt" onclick="endManualRoundNow(${cur})">${t("endRound")}</button>` : "";
+  const timer = started && !locked ? `<div class="timerbar${left <= 10 ? " urgent" : ""}" id="mtimer">⏱ ${left}</div>` : "";
+  return `${timer}<p class="sub center"><span class="badge">${t("manualBadge")}</span></p>
+  <p class="sub center">${t("round")} ${cur} ${t("of")} ${n}</p>${tabs}
+  ${banner}${hostBtn}
   <p class="sub center">${t("manualHint")}<br>${t("onlyOwn")}</p>
   ${cards}${sheetTable()}
   ${isHost() ? `<button class="ghost" onclick="addRound()">${t("addRound")}</button>` : ""}${isHost() ? `<button class="alt" onclick="endGame()">${t("finishGame")}</button>` : ""}`;
@@ -544,7 +573,30 @@ function finalView() {
 }
 
 /* ---------- timer + auto-submit ---------- */
+let lastLockedKey = "", hostLockedFor = {};
+function manualTick() {
+  const r = state.room, rd = state.manualRound || 1;
+  if (!r || !isManual() || r.status !== "manual" || !mStarted(rd)) return;
+  const left = mLeft(rd), locked = allLocked(rd);
+  const el = document.getElementById("mtimer"); if (el) { el.textContent = "⏱ " + left; el.classList.toggle("urgent", left <= 10); }
+  const me = state.players.find((x) => x.id === state.pid);
+  // time is up: lock in whatever is typed
+  if (left === 0 && me && !mr(me, rd).l) lockWords(rd, true, true);
+  // safety net: if someone's phone went to sleep, the host locks them in 3 seconds later so the round never gets stuck
+  if (left === 0 && isHost() && Date.now() > mEnds(rd) + 3000 && !hostLockedFor[rd]) {
+    hostLockedFor[rd] = true;
+    state.players.filter((p) => !mr(p, rd).l && p.id !== state.pid).forEach((p) => { editRound(p.id, rd, (c) => { c.l = 1; }); saveManual(p.id, true); });
+  }
+  // everyone locked in: tell everybody (buzz + banner)
+  const key = rd + "|" + locked + "|" + (left === 0); // redraw once when everyone locks in, and once when the timer ends
+  if (key !== lastLockedKey) {
+    const was = lastLockedKey; lastLockedKey = key;
+    if (locked && !was.includes("|true|")) { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} }
+    render(true);
+  }
+}
 setInterval(() => {
+  manualTick();
   const r = state.room; if (!r || r.status !== "entering") return;
   const left = Math.max(0, Math.ceil((new Date(r.round_ends_at).getTime() - Date.now()) / 1000));
   const el = $("#timer"); if (el) { el.textContent = "⏱ " + left; el.classList.toggle("urgent", left <= 10); }
