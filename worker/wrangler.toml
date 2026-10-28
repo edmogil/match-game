@@ -1,0 +1,11 @@
+name = "matchgame-worker"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Create the KV namespace with:  npx wrangler kv namespace create CACHE
+# then paste the id it prints below.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "PASTE_KV_ID_HERE"
+
+# Secret (never in this file):  npx wrangler secret put GEMINI_API_KEY

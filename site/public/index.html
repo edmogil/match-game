@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14102b">
+<title>Match Game</title>
+<style>
+  :root{--bg:#14102b;--card:#211a45;--card2:#2b2358;--ink:#f4f0ff;--mute:#a79fd0;--pink:#ff4fa3;--cyan:#38e1ff;--lime:#b6ff5c;--red:#ff6b6b}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:radial-gradient(1200px 700px at 50% -10%,#3a2a8a 0%,var(--bg) 60%) fixed;color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100%}
+  #app{max-width:480px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
+  h1{font-size:34px;margin:8px 0 4px;letter-spacing:-.5px}
+  h2{font-size:22px;margin:0 0 10px}
+  .sub{color:var(--mute);margin:0 0 20px}
+  .card{background:var(--card);border-radius:20px;padding:18px;margin:14px 0}
+  input{width:100%;font-size:20px;padding:16px;border-radius:14px;border:2px solid transparent;background:var(--card2);color:var(--ink);outline:none;margin:6px 0}
+  input:focus{border-color:var(--cyan)}
+  button{width:100%;font-size:20px;font-weight:700;padding:16px;border:0;border-radius:16px;color:#14102b;background:linear-gradient(135deg,var(--cyan),var(--lime));margin:8px 0;cursor:pointer}
+  button.alt{background:linear-gradient(135deg,var(--pink),#ff9d4f)}
+  button.ghost{background:var(--card2);color:var(--ink)}
+  button:disabled{opacity:.45}
+  .foot{text-align:center;color:var(--mute);font-size:13px;padding:18px 0 28px}
+  .foot a{color:var(--cyan);text-decoration:underline}
+  .top{display:flex;justify-content:space-between;align-items:center;color:var(--mute);font-size:14px}
+  .top button{width:auto;padding:6px 12px;font-size:14px;margin:0}
+  .code{font-size:60px;font-weight:900;letter-spacing:10px;text-align:center;color:var(--cyan);margin:6px 0}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:var(--card2);padding:8px 14px;border-radius:999px;font-size:16px}
+  .chip.me{outline:2px solid var(--pink)}
+  .prompt{font-size:44px;font-weight:900;text-align:center;margin:10px 0;color:var(--lime);word-break:break-word}
+  .timer{font-size:30px;font-weight:800;text-align:center;color:var(--pink);min-height:40px}
+  .timerbar{position:sticky;top:0;z-index:5;margin:0 -16px;padding:8px 0;text-align:center;font-size:32px;font-weight:900;color:var(--pink);background:rgba(20,16,43,.94);border-radius:0 0 18px 18px;letter-spacing:1px}
+  .timerbar.urgent{color:var(--red);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.55}}
+  .err{color:var(--red);min-height:22px;margin:6px 0}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #ffffff14;font-size:18px}
+  .row:last-child{border:0}
+  .w{padding:6px 0;font-size:18px}
+  .ok{color:var(--lime)}.no{color:var(--mute)}
+  .pts{font-weight:900;color:var(--cyan)}
+  .rtabs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;margin:0 -4px}
+  .rtabs button{width:auto;flex:0 0 auto;min-width:48px;padding:10px 14px;font-size:16px;margin:0;background:var(--card2);color:var(--ink)}
+  .rtabs button.on{background:linear-gradient(135deg,var(--pink),#ff9d4f);color:#14102b}
+  .wrow{display:flex;gap:8px;margin:8px 0}
+  .wrow button{margin:0;padding:14px 0;font-size:18px;background:var(--card2);color:var(--mute)}
+  .wrow button.on{background:linear-gradient(135deg,var(--cyan),var(--lime));color:#14102b}
+  .wrow button:disabled{opacity:1}
+  .mrow{display:flex;gap:8px;align-items:center}
+  .mrow .mw{flex:1;min-width:0}
+  .mrow .mn{width:76px;flex:0 0 76px;text-align:center;font-weight:900;color:var(--cyan)}
+  .mrow input[readonly]{opacity:.9}
+  .mrow input:disabled{opacity:.45}
+  .sheetwrap{overflow-x:auto}
+  table.sheet{border-collapse:collapse;width:100%;font-size:15px}
+  table.sheet th,table.sheet td{padding:6px 8px;text-align:center;border-bottom:1px solid #ffffff14;white-space:nowrap}
+  table.sheet th:first-child,table.sheet td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+  table.sheet td.t{font-weight:900;color:var(--cyan)}
+  .badge{display:inline-block;background:var(--card2);color:var(--lime);padding:4px 12px;border-radius:999px;font-size:14px;font-weight:700}
+
+  .center{text-align:center}
+  #qr{display:flex;justify-content:center;margin:10px 0}
+  #qr img,#qr canvas{border-radius:12px;background:#fff;padding:8px}
+  .big{font-size:20px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="foot"><a href="#" onclick="hardRefresh();return false">↻ Refresh / Обновить</a> · v9</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="config.js?v=9"></script>
+<script src="app.js?v=9"></script>
+</body>
+</html>
