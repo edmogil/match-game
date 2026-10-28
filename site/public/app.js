@@ -1,7 +1,7 @@
 /* Match Game: phone client. Host's phone drives round transitions. */
 const T = {
   en: {
-    title: "Игра в Банальности", tagline: "Think alike. Score points.",
+    title: "Match Game", tagline: "Think alike. Score points.",
     yourName: "Your name", roomCode: "Room code", create: "Create a room", join: "Join room",
     players: "Players", start: "Start game", needPlayers: "Need at least 2 players", waitHost: "Waiting for the host to start...",
     round: "Round", of: "of", pickPrompt: "Pick a word or theme", promptPh: "e.g. Beach, Fruit, Summer",
@@ -448,6 +448,7 @@ function scoreboard() {
 }
 
 function render(force) {
+  document.title = t("title"); // browser tab name follows the language
   const app = $("#app");
   const r = state.room;
   // keep typing intact: while entering words, only update small bits
