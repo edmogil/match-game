@@ -1,7 +1,7 @@
 /* Match Game: phone client. Host's phone drives round transitions. */
 const T = {
   en: {
-    title: "Match Game", tagline: "Think alike. Score points.",
+    title: "Игра в Банальности", tagline: "Think alike. Score points.",
     yourName: "Your name", roomCode: "Room code", create: "Create a room", join: "Join room",
     players: "Players", start: "Start game", needPlayers: "Need at least 2 players", waitHost: "Waiting for the host to start...",
     round: "Round", of: "of", pickPrompt: "Pick a word or theme", promptPh: "e.g. Beach, Fruit, Summer",
@@ -20,7 +20,7 @@ const T = {
     hostEdits: "", lockedPrivate: "Locked in. Words stay private until read aloud.", onlyOwn: "You only see your own words. After you lock in, you can only change your match counts.", manualWord: "Word",
   },
   ru: {
-    title: "Match Game", tagline: "Думай как все. Набирай очки.",
+    title: "Игра в Банальности", tagline: "Думай как все. Набирай очки.",
     yourName: "Твоё имя", roomCode: "Код комнаты", create: "Создать комнату", join: "Войти в комнату",
     players: "Игроки", start: "Начать игру", needPlayers: "Нужно минимум 2 игрока", waitHost: "Ждём, пока хозяин начнёт игру...",
     round: "Раунд", of: "из", pickPrompt: "Выбери слово или тему", promptPh: "напр. Пляж, Фрукты, Лето",
