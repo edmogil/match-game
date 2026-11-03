@@ -17,6 +17,7 @@ const T = {
     manual: "Manual Mode", manualBadge: "Manual scoring", manualHint: "The host starts the round and you have 90 seconds to type 3 words. Words lock automatically when time runs out, and can't be changed after that. When everyone is locked in, the app tells you. Then read your words out loud one at a time and type how many matched next to each word.",
     matchCount: "Matches", startRound: "Start round", notStarted: "Waiting for the round to start...", waitHostStart: "Waiting for the host to start the round...", hostStartHint: "Press Start when everyone is ready. Everyone gets 90 seconds to type.", allLocked: "Everyone is locked in! Now read your words out loud, one at a time, then type your match counts.", typing: "Waiting for words...", unlock: "Edit my words", lockedIn: "Locked in:", finishGame: "Finish game & show final scores",
     roundTotal: "Round total", total: "Total", word: "Word", addRound: "+ Add a round", reopen: "Back to scoring", sheet: "Score sheet", player: "Player",
+    leave: "Leave", leaveConfirm: "Leave the game? Your score will be removed.", leaveHostConfirm: "You are the host. If you leave, the host role passes to another player. Leave the game?",
     hostEdits: "", lockedPrivate: "Locked in. Words stay private until read aloud.", onlyOwn: "You only see your own words. After you lock in, you can only change your match counts.", manualWord: "Word",
   },
   ru: {
@@ -36,6 +37,7 @@ const T = {
     manual: "Ручной режим", manualBadge: "Ручной подсчёт", manualHint: "Хозяин начинает раунд, у тебя 90 секунд на 3 слова. Когда время выйдет, слова блокируются сами, и менять их нельзя. Когда все готовы, приложение сообщит. Тогда читайте слова вслух по очереди и вводите рядом с каждым словом число совпадений.",
     matchCount: "Совпадений", startRound: "Начать раунд", notStarted: "Ждём начала раунда...", waitHostStart: "Ждём, пока хозяин начнёт раунд...", hostStartHint: "Нажми «Начать», когда все готовы. У всех 90 секунд на ввод.", allLocked: "Все готовы! Читайте свои слова вслух по очереди, затем вводите числа совпадений.", typing: "Ждём слова...", unlock: "Изменить мои слова", lockedIn: "Готовы:", finishGame: "Закончить игру и показать итоги",
     roundTotal: "Итог раунда", total: "Всего", word: "Слово", addRound: "+ Добавить раунд", reopen: "Назад к подсчёту", sheet: "Таблица счёта", player: "Игрок",
+    leave: "Выйти", leaveConfirm: "Выйти из игры? Твои очки будут удалены.", leaveHostConfirm: "Ты хозяин. Если выйдешь, роль хозяина перейдёт к другому игроку. Выйти из игры?",
     hostEdits: "", lockedPrivate: "Готово. Слова скрыты, пока их не прочитают вслух.", onlyOwn: "Ты видишь только свои слова. После «Готово» можно менять только числа совпадений.", manualWord: "Слово",
   },
 };
@@ -191,6 +193,31 @@ function leaveRoom() {
   render(true);
 }
 
+// Quit for good: remove this player from the room so the game doesn't wait for them.
+async function quitGame() {
+  const r = state.room; if (!r || !state.pid || busy) return;
+  const pid = state.pid, code = r.id, host = r.host === pid;
+  if (!confirm(host && state.players.length > 1 ? t("leaveHostConfirm") : t("leaveConfirm"))) return;
+  busy = true;
+  try {
+    const others = state.players.filter((p) => p.id !== pid); // already ordered by joined_at
+    if (others.length === 0) {
+      const { error } = await sb.from("rooms").delete().eq("id", code); // last one out closes the room
+      if (error) throw error;
+    } else {
+      const upd = {};
+      if (r.host === pid) upd.host = others[0].id; // host passes to the longest-standing player
+      if (r.picker === pid) upd.picker = upd.host || others[0].id;
+      // online mode needs 2+ players: if only one is left mid-game, finish it
+      if (!isManual() && others.length < 2 && !["lobby", "finished"].includes(r.status)) upd.status = "finished";
+      if (Object.keys(upd).length) { const { error } = await sb.from("rooms").update(upd).eq("id", code); if (error) throw error; }
+      const { error: e2 } = await sb.from("players").delete().eq("id", pid); // their submissions go with them
+      if (e2) throw e2;
+    }
+    leaveRoom();
+  } catch (e) { console.error(e); setErr(t("err")); } finally { busy = false; }
+}
+
 let rq = null;
 function queueRefresh() { clearTimeout(rq); rq = setTimeout(refresh, 120); }
 
@@ -201,6 +228,7 @@ async function refresh() {
   if (!room) { leaveRoom(); return; }
   const { data: players } = await sb.from("players").select("*").eq("room_id", code).order("joined_at");
   const { data: subs } = await sb.from("submissions").select("*").eq("room_id", code).eq("round", room.round);
+  if (players && !players.some((p) => p.id === state.pid)) { leaveRoom(); return; } // we were removed (e.g. left from another device)
   if (pendingSaves > 0 || manualEdits !== editsAtStart) return; // don't overwrite a score tap that is still saving
   state.room = room; state.players = players || []; state.subs = subs || [];
   render(); hostTick();
@@ -440,7 +468,8 @@ function setLang() { lang = lang === "en" ? "ru" : "en"; localStorage.setItem("m
 
 /* ---------- rendering ---------- */
 function topBar() {
-  return `<div class="top"><span>${state.room && state.room.status ? esc(state.room.id) : ""}</span><button class="ghost" onclick="setLang()">${lang === "en" ? "RU" : "EN"}</button></div>`;
+  const inRoom = state.room && state.room.status && state.room.status !== "lobby"; // lobby already has its own back arrow
+  return `<div class="top"><span>${state.room && state.room.status ? esc(state.room.id) : ""}</span><span style="display:flex;gap:8px">${inRoom ? `<button class="ghost" onclick="quitGame()">${t("leave")}</button>` : ""}<button class="ghost" onclick="setLang()">${lang === "en" ? "RU" : "EN"}</button></span></div>`;
 }
 function scoreboard() {
   const list = [...state.players].sort((a, b) => scoreOf(b) - scoreOf(a));
@@ -504,7 +533,7 @@ function lobbyView() {
   <div class="card"><h2>${t("players")} (${state.players.length})</h2><div class="chips">${state.players.map((p) => `<span class="chip ${p.id === state.pid ? "me" : ""}">${esc(p.name)}${p.id === state.room.host ? " ⭐" : ""}</span>`).join("")}</div></div>
   <div class="card center big">${t("rounds")}: ${host ? `<select id="rounds" onchange="setRounds(this.value)" style="font-size:20px;padding:8px 12px;border-radius:12px;background:var(--card2);color:var(--ink);border:0">${[3, 4, 5, 7, 10, 15].map((n) => `<option value="${n}" ${n === state.room.total_rounds ? "selected" : ""}>${n}</option>`).join("")}</select>` : `<b>${state.room.total_rounds}</b>`}</div>
   ${host ? `<button ${state.players.length < (isManual() ? 1 : 2) ? "disabled" : ""} onclick="startGame()">${t("start")}</button>${state.players.length < (isManual() ? 1 : 2) ? `<p class="center sub">${t("needPlayers")}</p>` : ""}` : `<p class="center sub">${t("waitHost")}</p>`}
-  <button class="ghost" onclick="leaveRoom()">←</button>`;
+  <button class="ghost" onclick="quitGame()">←</button>`;
 }
 
 function roundHeader() { return `<p class="sub center">${t("round")} ${state.room.round} ${t("of")} ${state.room.total_rounds}</p>`; }
@@ -625,4 +654,4 @@ async function hardRefresh() {
   const u = new URL(location.href); u.searchParams.set("r", Date.now());
   location.replace(u.toString());
 }
-Object.assign(window, { hardRefresh, setWord, setNum, lockWords, showRound, addRound, reopenScoring, endRoundNow, endGame, setRounds, createRoom, joinRoom, startGame, sendPrompt, submitWords, nextRound, copyLink, setLang, leaveRoom, state });
+Object.assign(window, { hardRefresh, setWord, setNum, lockWords, showRound, addRound, reopenScoring, endRoundNow, endGame, setRounds, createRoom, joinRoom, startGame, sendPrompt, submitWords, nextRound, copyLink, setLang, leaveRoom, quitGame, state });
